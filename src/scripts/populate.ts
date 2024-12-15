@@ -179,21 +179,11 @@ async function checkVersions(
 async function getLatestDiscordVersions(): Promise<DiscordVersions> {
     console.log("Fetching latest Discord versions for all platforms...");
 
-    const windowsVersion = await getLatestWindowsVersion(
-        DISCORD_BASE_URLS.windows
-    );
-    const macVersions = await checkVersions(
-        DISCORD_BASE_URLS.mac,
-        329,
-        4,
-        "mac"
-    );
-    const linuxVersions = await checkVersions(
-        DISCORD_BASE_URLS.linux,
-        77,
-        4,
-        "linux"
-    );
+    const [windowsVersion, macVersions, linuxVersions] = await Promise.all([
+        getLatestWindowsVersion(DISCORD_BASE_URLS.windows),
+        checkVersions(DISCORD_BASE_URLS.mac, 329, 200, "mac"),
+        checkVersions(DISCORD_BASE_URLS.linux, 77, 200, "linux"),
+    ]);
 
     const versions: DiscordVersions = {
         windows: windowsVersion,
@@ -208,6 +198,8 @@ async function getLatestDiscordVersions(): Promise<DiscordVersions> {
 async function populateDatabase(db: Db, versions: DiscordVersions) {
     const versionsCollection = db.collection<Version>("versions");
 
+    const updatePromises: Promise<any>[] = [];
+
     for (const [platform, versionInfo] of Object.entries(versions)) {
         if (platform === "windows") {
             const version = versionInfo as string;
@@ -218,39 +210,40 @@ async function populateDatabase(db: Db, versions: DiscordVersions) {
                 continue;
             }
             const installerLink = `https://discord.com/api/download?platform=win&format=exe&version=${version}`;
-            try {
-                const { fileSize, etag } = await getModuleInfo(installerLink);
-                const versionDoc: Version = {
-                    platform: "windows",
-                    version,
-                    installerLink,
-                    mirrorLink: "placeholder",
-                    downloadAllModLink: "placeholder",
-                    customInstallLink: "placeholder",
-                    nekocordTimeMachineLink: "placeholder",
-                    installerSize: fileSize,
-                    mirrorSize: 0,
-                    downloadAllModSize: 0,
-                    customInstallSize: 0,
-                    installerEtag: etag,
-                    mirrorEtag: "",
-                    downloadAllModEtag: "",
-                    customInstallEtag: "",
-                };
-                await versionsCollection.updateOne(
-                    {
-                        version: versionDoc.version,
-                        platform: versionDoc.platform,
-                    },
-                    { $set: versionDoc },
-                    { upsert: true }
-                );
-            } catch (error) {
-                console.error(
-                    `Error fetching Windows installer info: ${error}`
-                );
-                continue;
-            }
+            updatePromises.push((async () => {
+                try {
+                    const { fileSize, etag } = await getModuleInfo(installerLink);
+                    const versionDoc: Version = {
+                        platform: "windows",
+                        version,
+                        installerLink,
+                        mirrorLink: "placeholder",
+                        downloadAllModLink: "placeholder",
+                        customInstallLink: "placeholder",
+                        nekocordTimeMachineLink: "placeholder",
+                        installerSize: fileSize,
+                        mirrorSize: 0,
+                        downloadAllModSize: 0,
+                        customInstallSize: 0,
+                        installerEtag: etag,
+                        mirrorEtag: "",
+                        downloadAllModEtag: "",
+                        customInstallEtag: "",
+                    };
+                    return versionsCollection.updateOne(
+                        {
+                            version: versionDoc.version,
+                            platform: versionDoc.platform,
+                        },
+                        { $set: versionDoc },
+                        { upsert: true }
+                    );
+                } catch (error) {
+                    console.error(
+                        `Error fetching Windows installer info: ${error}`
+                    );
+                }
+            })());
         } else {
             for (const info of versionInfo as ModuleInfo[]) {
                 const versionDoc: Version = {
@@ -271,13 +264,15 @@ async function populateDatabase(db: Db, versions: DiscordVersions) {
                     customInstallEtag: "",
                 };
 
-                await versionsCollection.updateOne(
-                    {
-                        version: versionDoc.version,
-                        platform: versionDoc.platform,
-                    },
-                    { $set: versionDoc },
-                    { upsert: true }
+                updatePromises.push(
+                    versionsCollection.updateOne(
+                        {
+                            version: versionDoc.version,
+                            platform: versionDoc.platform,
+                        },
+                        { $set: versionDoc },
+                        { upsert: true }
+                    )
                 );
 
                 for (const moduleName of MODULE_NAMES) {
@@ -287,36 +282,39 @@ async function populateDatabase(db: Db, versions: DiscordVersions) {
                             platform as keyof typeof DISCORD_BASE_URLS
                         ]
                     }/${info.version}/modules/${moduleName}-1.zip`;
-                    const { fileSize: moduleSize, etag: moduleEtag } =
-                        await getModuleInfo(moduleUrl);
-                    console.log(
-                        `Module ${moduleName} for ${platform} version ${info.version} has size ${moduleSize} bytes and ETag ${moduleEtag}`
-                    );
+                    updatePromises.push((async () => {
+                        const { fileSize: moduleSize, etag: moduleEtag } =
+                            await getModuleInfo(moduleUrl);
+                        console.log(
+                            `Module ${moduleName} for ${platform} version ${info.version} has size ${moduleSize} bytes and ETag ${moduleEtag}`
+                        );
 
-                    const moduleDoc: Module = {
-                        version: info.version,
-                        module_name: moduleName,
-                        downloadSize: moduleSize,
-                        mirrorSize: 0,
-                        downloadEtag: moduleEtag,
-                        mirrorEtag: "",
-                        downloadLink: moduleUrl,
-                        mirrorLink: "placeholder",
-                    };
+                        const moduleDoc: Module = {
+                            version: info.version,
+                            module_name: moduleName,
+                            downloadSize: moduleSize,
+                            mirrorSize: 0,
+                            downloadEtag: moduleEtag,
+                            mirrorEtag: "",
+                            downloadLink: moduleUrl,
+                            mirrorLink: "placeholder",
+                        };
 
-                    await moduleCollection.updateOne(
-                        {
-                            version: moduleDoc.version,
-                            module_name: moduleDoc.module_name,
-                        },
-                        { $set: moduleDoc },
-                        { upsert: true }
-                    );
+                        return moduleCollection.updateOne(
+                            {
+                                version: moduleDoc.version,
+                                module_name: moduleDoc.module_name,
+                            },
+                            { $set: moduleDoc },
+                            { upsert: true }
+                        );
+                    })());
                 }
             }
         }
     }
 
+    await Promise.all(updatePromises);
     console.log("Database populated with version information");
 }
 
