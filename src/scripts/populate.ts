@@ -5,7 +5,7 @@ import { Db, MongoClient } from "mongodb";
 dotenv.config();
 
 interface DiscordVersions {
-    windows: string;
+    windows: ModuleInfo[];
     mac: ModuleInfo[];
     linux: ModuleInfo[];
 }
@@ -47,7 +47,7 @@ interface Module {
 }
 
 const DISCORD_BASE_URLS = {
-    windows: "https://discord.com/api/download?platform=win",
+    windows: "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64",
     mac: "https://stable.dl2.discordapp.net/apps/osx",
     linux: "https://stable.dl2.discordapp.net/apps/linux",
 };
@@ -79,10 +79,17 @@ function extractVersion(url: string): string {
 
     const filenamePattern = /(\d+\.\d+\.\d+)/;
     const filenameMatch = parts[parts.length - 1].match(filenamePattern);
-    return filenameMatch ? filenameMatch[1] : "Unknown Version";
+    if (filenameMatch) {
+        return filenameMatch[1];
+    }
+
+    // Handle Windows specific URL pattern
+    const windowsPattern = /\/win\/x64\/(\d+\.\d+\.\d+)\//;
+    const windowsMatch = url.match(windowsPattern);
+    return windowsMatch ? windowsMatch[1] : "Unknown Version";
 }
 
-async function getLatestWindowsVersion(url: string): Promise<string> {
+async function getLatestWindowsVersion(url: string): Promise<ModuleInfo[]> {
     console.log(`Fetching latest Discord version for Windows...`);
 
     try {
@@ -92,16 +99,54 @@ async function getLatestWindowsVersion(url: string): Promise<string> {
         });
 
         if (response.headers.location) {
-            const version = extractVersion(response.headers.location);
-            console.log(`[Windows] Extracted version: ${version}`);
-            return version;
+            const redirectUrl = response.headers.location;
+            const latestVersion = extractVersion(redirectUrl);
+            console.log(`[Windows] Latest version: ${latestVersion}`);
+
+            const versions = await checkWindowsVersions(latestVersion, 200, 329);
+            return versions;
         }
 
         throw new Error("No redirect location found in response headers");
     } catch (error) {
         console.error(`Error fetching Discord version for Windows:`, error);
-        return "Error fetching version";
+        return [];
     }
+}
+
+async function checkWindowsVersions(latestVersion: string, versionCount: number, limit: number): Promise<ModuleInfo[]> {
+    const downloadableVersions: ModuleInfo[] = [];
+    const [major, minor, patch] = latestVersion.split('.').map(Number);
+
+    for (let i = 0; i < versionCount && downloadableVersions.length < limit; i++) {
+        const currentPatch = patch - i;
+        if (currentPatch < 0) break;
+
+        const versionString = `${major}.${minor}.${currentPatch}`;
+        const url = `https://stable.dl2.discordapp.net/distro/app/stable/win/x64/${versionString}/DiscordSetup.exe`;
+
+        try {
+            const { fileSize, etag } = await getModuleInfo(url);
+            if (fileSize > 0) {
+                downloadableVersions.push({
+                    version: versionString,
+                    downloadLink: url,
+                    fileSize,
+                    etag,
+                });
+                console.log(
+                    `Installer for Windows version ${versionString} is downloadable. Size: ${fileSize} bytes, ETag: ${etag}`
+                );
+            }
+        } catch (error) {
+            console.error(
+                `Error checking Windows version ${versionString}:`,
+                error
+            );
+        }
+    }
+
+    return downloadableVersions;
 }
 
 async function getModuleInfo(
@@ -179,14 +224,14 @@ async function checkVersions(
 async function getLatestDiscordVersions(): Promise<DiscordVersions> {
     console.log("Fetching latest Discord versions for all platforms...");
 
-    const [windowsVersion, macVersions, linuxVersions] = await Promise.all([
+    const [windowsVersions, macVersions, linuxVersions] = await Promise.all([
         getLatestWindowsVersion(DISCORD_BASE_URLS.windows),
-        checkVersions(DISCORD_BASE_URLS.mac, 329, 200, "mac"),
-        checkVersions(DISCORD_BASE_URLS.linux, 77, 200, "linux"),
+        checkVersions(DISCORD_BASE_URLS.mac, 329, 330, "mac"),
+        checkVersions(DISCORD_BASE_URLS.linux, 77, 78, "linux"),
     ]);
 
     const versions: DiscordVersions = {
-        windows: windowsVersion,
+        windows: windowsVersions,
         mac: macVersions,
         linux: linuxVersions,
     };
@@ -202,80 +247,37 @@ async function populateDatabase(db: Db, versions: DiscordVersions) {
     const updatePromises: Promise<any>[] = [];
 
     for (const [platform, versionInfo] of Object.entries(versions)) {
-        if (platform === "windows") {
-            const version = versionInfo as string;
-            if (version === "Error fetching version") {
-                console.error(
-                    "Failed to fetch Windows version. Skipping Windows population."
-                );
-                continue;
-            }
-            const installerLink = `https://discord.com/api/download?platform=win&format=exe&version=${version}`;
-            updatePromises.push((async () => {
-                try {
-                    const { fileSize, etag } = await getModuleInfo(installerLink);
-                    const versionDoc: Version = {
-                        platform: "windows",
-                        version,
-                        installerLink,
-                        mirrorLink: "placeholder",
-                        downloadAllModLink: "placeholder",
-                        customInstallLink: "placeholder",
-                        nekocordTimeMachineLink: "placeholder",
-                        installerSize: fileSize,
-                        mirrorSize: 0,
-                        downloadAllModSize: 0,
-                        customInstallSize: 0,
-                        installerEtag: etag,
-                        mirrorEtag: "",
-                        downloadAllModEtag: "",
-                        customInstallEtag: "",
-                    };
-                    return versionsCollection.updateOne(
-                        {
-                            version: versionDoc.version,
-                            platform: versionDoc.platform,
-                        },
-                        { $set: versionDoc },
-                        { upsert: true }
-                    );
-                } catch (error) {
-                    console.error(
-                        `Error fetching Windows installer info: ${error}`
-                    );
-                }
-            })());
-        } else {
-            for (const info of versionInfo as ModuleInfo[]) {
-                const versionDoc: Version = {
-                    platform,
-                    version: info.version,
-                    installerLink: info.downloadLink,
-                    mirrorLink: "placeholder",
-                    downloadAllModLink: "placeholder",
-                    customInstallLink: "placeholder",
-                    nekocordTimeMachineLink: "placeholder",
-                    installerSize: info.fileSize,
-                    mirrorSize: 0,
-                    downloadAllModSize: 0,
-                    customInstallSize: 0,
-                    installerEtag: info.etag,
-                    mirrorEtag: "",
-                    downloadAllModEtag: "",
-                    customInstallEtag: "",
-                };
+        for (const info of versionInfo) {
+            const versionDoc: Version = {
+                platform,
+                version: info.version,
+                installerLink: info.downloadLink,
+                mirrorLink: "placeholder",
+                downloadAllModLink: "placeholder",
+                customInstallLink: "placeholder",
+                nekocordTimeMachineLink: "placeholder",
+                installerSize: info.fileSize,
+                mirrorSize: 0,
+                downloadAllModSize: 0,
+                customInstallSize: 0,
+                installerEtag: info.etag,
+                mirrorEtag: "",
+                downloadAllModEtag: "",
+                customInstallEtag: "",
+            };
 
-                updatePromises.push(
-                    versionsCollection.updateOne(
-                        {
-                            version: versionDoc.version,
-                            platform: versionDoc.platform,
-                        },
-                        { $set: versionDoc },
-                        { upsert: true }
-                    )
-                );
+            updatePromises.push(
+                versionsCollection.updateOne(
+                    {
+                        version: versionDoc.version,
+                        platform: versionDoc.platform,
+                    },
+                    { $set: versionDoc },
+                    { upsert: true }
+                )
+            );
 
+            if (platform !== "windows") {
                 for (const moduleName of MODULE_NAMES) {
                     const moduleCollection = db.collection<Module>(moduleName);
                     const moduleUrl = `${
