@@ -1,3 +1,4 @@
+"use client";
 import ClientHome from "@/components/ClientHome";
 import axios from "axios";
 
