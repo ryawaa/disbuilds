@@ -412,7 +412,7 @@ function BuildsPageContent() {
                             <div className="mt-8 text-center">
                                 <button
                                     onClick={loadMore}
-                                    className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-md"
+                                    className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-3xl"
                                     disabled={isLoading}
                                 >
                                     {isLoading ? "Loading..." : "Load More"}
