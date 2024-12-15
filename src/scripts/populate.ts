@@ -198,6 +198,7 @@ async function getLatestDiscordVersions(): Promise<DiscordVersions> {
 async function populateDatabase(db: Db, versions: DiscordVersions) {
     const versionsCollection = db.collection<Version>("versions");
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatePromises: Promise<any>[] = [];
 
     for (const [platform, versionInfo] of Object.entries(versions)) {
