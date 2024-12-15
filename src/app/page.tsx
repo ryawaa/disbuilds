@@ -7,16 +7,25 @@ import {
 } from "@fortawesome/free-brands-svg-icons";
 
 const platforms = [
-    { name: "Windows", icon: faWindows },
-    { name: "macOS", icon: faApple },
-    { name: "Linux", icon: faLinux },
+    { name: "Windows", icon: faWindows, key: "windows" },
+    { name: "macOS", icon: faApple, key: "mac" },
+    { name: "Linux", icon: faLinux, key: "linux" },
 ];
 
 // This function should be replaced with actual OS detection logic
 const getDetectedOS = () => "macOS";
 
-export default function Home() {
+async function getLatestVersions() {
+    const res = await fetch('http://localhost:3000/api/latest', { cache: 'no-store' });
+    if (!res.ok) {
+        throw new Error('Failed to fetch data');
+    }
+    return res.json();
+}
+
+export default async function Home() {
     const detectedOS = getDetectedOS();
+    const latestVersions = await getLatestVersions();
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-between p-8 bg-black">
@@ -40,7 +49,7 @@ export default function Home() {
                             >
                                 <div className="flex flex-col items-center cursor-pointer transition-all duration-300">
                                     <div
-                                        className={`flex flex-col w-32 h-36 items-center justify-center
+                                        className={`flex flex-col w-32 h-40 items-center justify-center
                                       ${
                                           platform.name.toLowerCase() ===
                                           detectedOS.toLowerCase()
@@ -59,6 +68,9 @@ export default function Home() {
                                         />
                                         <span className="text-sm font-light mt-2 opacity-60 group-hover:opacity-100 transition-opacity duration-300">
                                             {platform.name}
+                                        </span>
+                                        <span className="text-xs font-light mb-2 opacity-60 group-hover:opacity-100 transition-opacity duration-300">
+                                            {latestVersions[platform.key]?.version || 'Loading...'}
                                         </span>
                                     </div>
                                     {detectedOS.toLowerCase() ===
