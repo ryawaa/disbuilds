@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
         const searchParams = request.nextUrl.searchParams;
         const platform = searchParams.get("platform");
         const page = parseInt(searchParams.get("page") || "1", 10);
-        const limit = parseInt(searchParams.get("limit") || "20", 10);
+        const limit = 3;
 
         console.log(
             `Received request - Platform: ${platform}, Page: ${page}, Limit: ${limit}`
