@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -35,7 +35,7 @@ interface Build {
     md5: string;
 }
 
-export default function BuildsPage() {
+function BuildsPageContent() {
     const searchParams = useSearchParams();
     const [selectedPlatform, setSelectedPlatform] = useState(searchParams.get('platform') || 'windows');
     const [expandedBuild, setExpandedBuild] = useState<string | null>(null);
@@ -161,5 +161,13 @@ export default function BuildsPage() {
                 </div>
             </footer>
         </div>
+    );
+}
+
+export default function BuildsPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <BuildsPageContent />
+        </Suspense>
     );
 }
