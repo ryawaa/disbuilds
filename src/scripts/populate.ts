@@ -6,7 +6,7 @@ dotenv.config();
 
 interface DiscordVersions {
     windows: string;
-    macOS: ModuleInfo[];
+    mac: ModuleInfo[];
     linux: ModuleInfo[];
 }
 
@@ -48,7 +48,7 @@ interface Module {
 
 const DISCORD_BASE_URLS = {
     windows: "https://discord.com/api/download?platform=win",
-    macOS: "https://stable.dl2.discordapp.net/apps/osx",
+    mac: "https://stable.dl2.discordapp.net/apps/osx",
     linux: "https://stable.dl2.discordapp.net/apps/linux",
 };
 
@@ -125,7 +125,7 @@ async function checkVersions(
     baseUrl: string,
     startVersion: number,
     versionCount: number,
-    platform: "macOS" | "linux"
+    platform: "mac" | "linux"
 ): Promise<ModuleInfo[]> {
     const downloadableVersions: ModuleInfo[] = [];
 
@@ -138,7 +138,7 @@ async function checkVersions(
         const moduleInfos: ModuleInfo[] = [];
 
         const fileName =
-            platform === "macOS"
+            platform === "mac"
                 ? "Discord.dmg"
                 : `discord-${versionString}.deb`;
         const url = `${baseUrl}/${versionString}/${fileName}`;
@@ -183,10 +183,10 @@ async function getLatestDiscordVersions(): Promise<DiscordVersions> {
         DISCORD_BASE_URLS.windows
     );
     const macVersions = await checkVersions(
-        DISCORD_BASE_URLS.macOS,
+        DISCORD_BASE_URLS.mac,
         329,
         4,
-        "macOS"
+        "mac"
     );
     const linuxVersions = await checkVersions(
         DISCORD_BASE_URLS.linux,
@@ -197,7 +197,7 @@ async function getLatestDiscordVersions(): Promise<DiscordVersions> {
 
     const versions: DiscordVersions = {
         windows: windowsVersion,
-        macOS: macVersions,
+        mac: macVersions,
         linux: linuxVersions,
     };
 
