@@ -68,9 +68,15 @@ async function getLatestDiscordVersions(): Promise<DiscordVersions> {
 export async function GET() {
   try {
     const latestVersions = await getLatestDiscordVersions();
-    return NextResponse.json(latestVersions);
+    return NextResponse.json(latestVersions, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+      },
+    });
   } catch (error) {
     console.error('Error while fetching Discord versions:', error);
     return NextResponse.json({ error: 'Failed to fetch Discord versions' }, { status: 500 });
   }
 }
+
+export const revalidate = 3600; // revalidate every hour
