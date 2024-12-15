@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         const total = builds.length;
 
         const buildsWithModules = await Promise.all(
-            paginatedBuilds.map(async (build) => {
+            paginatedBuilds.map(async (build: Build) => {
                 const modules: { [key: string]: ModuleInfo } = {};
                 for (const moduleName of MODULE_NAMES) {
                     const moduleCollection = db.collection(moduleName);
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
         console.log("First few builds:", buildsWithModules.slice(0, 3));
 
         return NextResponse.json({
-            builds: buildsWithModules.map((build) => ({
+            builds: buildsWithModules.map((build: Build) => ({
                 version: build.version,
                 platform: build.platform,
                 installerLink: build.installerLink || null,
@@ -131,13 +131,11 @@ export async function GET(request: NextRequest) {
             { error: "Internal Server Error" },
             { status: 500 }
         );
-    }
-}
-
-export async function closeMongoConnection() {
-    if (client) {
-        await client.close();
-        client = null;
-        console.log("Disconnected from MongoDB");
+    } finally {
+        if (client) {
+            await client.close();
+            client = null;
+            console.log("Disconnected from MongoDB");
+        }
     }
 }
