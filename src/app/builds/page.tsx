@@ -363,9 +363,9 @@ function BuildsPageContent() {
                                                             >
                                                                 <span className="text-sm flex items-center">
                                                                     {key}
-                                                                    {moduleData?.etag && (
+                                                                    {moduleData?.downloadEtag && (
                                                                         <span className="ml-2 text-xs text-gray-500">
-                                                                            {moduleData.etag.replace(
+                                                                            {moduleData.downloadEtag.replace(
                                                                                 /"/g,
                                                                                 ""
                                                                             )}
@@ -384,7 +384,7 @@ function BuildsPageContent() {
                                                                         Download
                                                                         (
                                                                         {formatFileSize(
-                                                                            moduleData.fileSize
+                                                                            moduleData.downloadSize
                                                                         )}
                                                                         )
                                                                     </Link>
