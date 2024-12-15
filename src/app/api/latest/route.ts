@@ -6,7 +6,7 @@ interface DiscordVersions {
     version: string;
     downloadLink: string;
   };
-  mac: {
+  macOS: {
     version: string;
     downloadLink: string;
   };
@@ -56,13 +56,13 @@ async function getLatestDiscordVersion(platform: string, url: string): Promise<{
 }
 
 async function getLatestDiscordVersions(): Promise<DiscordVersions> {
-  const [windows, mac, linux] = await Promise.all([
+  const [windows, macOS, linux] = await Promise.all([
     getLatestDiscordVersion('Windows', DISCORD_BASE_URLS.windows),
     getLatestDiscordVersion('macOS', DISCORD_BASE_URLS.mac),
     getLatestDiscordVersion('Linux', DISCORD_BASE_URLS.linux),
   ]);
 
-  return { windows, mac, linux };
+  return { windows, macOS, linux };
 }
 
 export async function GET() {
