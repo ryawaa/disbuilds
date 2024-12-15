@@ -7,6 +7,7 @@ import {
     faLinux,
 } from "@fortawesome/free-brands-svg-icons";
 import { useEffect, useState } from "react";
+import axios from "axios";
 
 const platforms = [
     { name: "Windows", icon: faWindows, key: "windows" },
@@ -45,7 +46,7 @@ function PlatformSelector({
     latestVersions,
     detectedOS,
 }: {
-    latestVersions: LatestVersions;
+    latestVersions: LatestVersions | null;
     detectedOS: string;
 }) {
     return (
@@ -78,9 +79,7 @@ function PlatformSelector({
                                 {platform.name}
                             </span>
                             <span className="text-xs font-light mb-2 opacity-60 group-hover:opacity-100 transition-opacity duration-300">
-                                {latestVersions[
-                                    platform.key as keyof LatestVersions
-                                ]?.version || "Loading..."}
+                                {latestVersions?.[platform.key as keyof LatestVersions]?.version || "Loading..."}
                             </span>
                         </div>
                         {detectedOS === platform.name && (
@@ -96,15 +95,49 @@ function PlatformSelector({
 }
 
 export default function ClientHome({
-    latestVersions,
+    apiUrl,
 }: {
-    latestVersions: LatestVersions;
+    apiUrl: string;
 }) {
     const [detectedOS, setDetectedOS] = useState("Unknown");
+    const [latestVersions, setLatestVersions] = useState<LatestVersions | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         setDetectedOS(getDetectedOS());
     }, []);
+
+    useEffect(() => {
+        const fetchLatestVersions = async () => {
+            try {
+                const res = await axios.get(apiUrl, {
+                    headers: {
+                        "Cache-Control": "no-cache",
+                        Pragma: "no-cache",
+                        Expires: "0",
+                    },
+                });
+                setLatestVersions(res.data);
+            } catch (error) {
+                console.error("Failed to fetch data:", error);
+                if (axios.isAxiosError(error)) {
+                    if (error.code === "ECONNREFUSED") {
+                        setError("Failed to connect to the server. Please ensure the server is running.");
+                    } else {
+                        setError(`Failed to fetch data: ${error.message}`);
+                    }
+                } else {
+                    setError("An unexpected error occurred while fetching data");
+                }
+            }
+        };
+
+        fetchLatestVersions();
+    }, [apiUrl]);
+
+    if (error) {
+        return <div>Error: {error}</div>;
+    }
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-between p-8 bg-black">
