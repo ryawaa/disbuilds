@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
         const searchParams = request.nextUrl.searchParams;
         const platform = searchParams.get("platform");
         const page = parseInt(searchParams.get("page") || "1", 10);
-        const limit = 3;
+        const limit = 20;
         const skip = (page - 1) * limit;
 
         console.log(
