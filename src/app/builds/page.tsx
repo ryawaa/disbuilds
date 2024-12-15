@@ -32,8 +32,8 @@ interface Build {
     modules: {
         [key: string]: {
             downloadLink: string;
-            fileSize: number;
-            etag: string;
+            downloadSize: number;
+            downloadEtag: string;
         };
     };
 }
