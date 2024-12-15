@@ -4,55 +4,75 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-    faChevronDown,
-    faChevronUp,
-    faDownload,
-} from "@fortawesome/free-solid-svg-icons";
+import { faChevronDown, faChevronUp } from "@fortawesome/free-solid-svg-icons";
 import {
     faWindows,
     faApple,
     faLinux,
 } from "@fortawesome/free-brands-svg-icons";
 import axios from "axios";
+import { ErrorBoundary } from "react-error-boundary";
 
 const platforms = [
-    { name: "Windows", icon: faWindows, key: "windows" },
-    { name: "macOS", icon: faApple, key: "macOS" },
-    { name: "Linux", icon: faLinux, key: "linux" },
-];
-
-const modules = [
-    { name: "discord_desktop_core-1.zip", size: "2.3 MB" },
-    { name: "discord_erlpack-1.zip", size: "1.1 MB" },
-    { name: "discord_spellcheck-1.zip", size: "0.8 MB" },
-    { name: "discord_utils-1.zip", size: "1.5 MB" },
-    { name: "discord_voice-1.zip", size: "3.2 MB" },
-    { name: "discord_zstd-1.zip", size: "0.6 MB" },
-    { name: "discord_krisp-1.zip", size: "4.7 MB" },
-    { name: "discord_game_utils-1.zip", size: "1.9 MB" },
-    { name: "discord_cloudsync-1.zip", size: "0.4 MB" },
-    { name: "discord_rpc-1.zip", size: "0.3 MB" },
-    { name: "discord_dispatch-1.zip", size: "1.2 MB" },
-    { name: "discord_modules-1.zip", size: "0.5 MB" },
+    { name: "Windows", key: "windows", icon: faWindows },
+    { name: "macOS", key: "mac", icon: faApple },
+    { name: "Linux", key: "linux", icon: faLinux },
 ];
 
 interface Build {
     version: string;
-    date: string;
-    size: string;
-    md5: string;
+    platform: string;
+    installerLink: string;
+    installerSize: number;
+    installerEtag: string;
+    mirrorLink: string;
+    downloadAllModLink: string;
+    customInstallLink: string;
+    nekocordTimeMachineLink: string;
+    modules: {
+        [key: string]: {
+            downloadLink: string;
+            fileSize: number;
+            etag: string;
+        };
+    };
 }
 
-interface LatestVersion {
+interface PaginationInfo {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+}
+
+interface LatestBuild {
     version: string;
-    downloadLink: string;
+    installerLink: string;
+    installerSize: number;
 }
 
-interface LatestVersions {
-    windows: LatestVersion;
-    mac: LatestVersion;
-    linux: LatestVersion;
+function formatFileSize(bytes: number): string {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+function ErrorFallback({
+    error,
+    resetErrorBoundary,
+}: {
+    error: Error;
+    resetErrorBoundary: () => void;
+}) {
+    return (
+        <div role="alert">
+            <p>Something went wrong:</p>
+            <pre>{error.message}</pre>
+            <button onClick={resetErrorBoundary}>Try again</button>
+        </div>
+    );
 }
 
 function SkeletonLoader() {
@@ -75,58 +95,72 @@ function BuildsPageContent() {
         searchParams.get("platform") || "windows"
     );
     const [expandedBuild, setExpandedBuild] = useState<string | null>(null);
-    const [latestVersions, setLatestVersions] = useState<LatestVersions | null>(
-        null
-    );
+    const [builds, setBuilds] = useState<Build[]>([]);
+    const [pagination, setPagination] = useState<PaginationInfo | null>(null);
+    const [latestBuild, setLatestBuild] = useState<LatestBuild | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const platform = searchParams.get("platform");
-        if (platform) {
+        if (platform && platform !== selectedPlatform) {
             setSelectedPlatform(platform);
+            setBuilds([]);
+            setIsLoading(true);
         }
-    }, [searchParams]);
+    }, [searchParams, selectedPlatform]);
+
+    const fetchLatestBuild = async () => {
+        try {
+            const response = await axios.get("/api/latest");
+            setLatestBuild(response.data[selectedPlatform]);
+        } catch (error) {
+            console.error("Failed to fetch latest build:", error);
+        }
+    };
+
+    const fetchBuilds = async (page = 1) => {
+        setIsLoading(true);
+        try {
+            const response = await axios.get("/api/builds", {
+                params: {
+                    platform: selectedPlatform,
+                    page,
+                    limit: 20,
+                },
+            });
+            if (page === 1) {
+                setBuilds(response.data.builds);
+            } else {
+                setBuilds((prevBuilds) => [
+                    ...prevBuilds,
+                    ...response.data.builds,
+                ]);
+            }
+            setPagination(response.data.pagination);
+            setError(null);
+        } catch (error) {
+            console.error("Failed to fetch builds:", error);
+            setError("Failed to fetch builds. Please try again later.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchLatestVersions = async () => {
-            setIsLoading(true);
-            try {
-                // Update the URL to use the full path
-                const response = await axios.get("/api/latest");
-                console.log("API Response:", response.data); // Add this line for debugging
-                setLatestVersions(response.data);
-                setError(null);
-            } catch (error) {
-                console.error("Failed to fetch latest versions:", error);
-                setError(
-                    "Failed to fetch latest versions. Please try again later."
-                );
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchLatestVersions();
-    }, []);
-
-    const builds: Build[] = [];
+        fetchLatestBuild();
+        fetchBuilds();
+    }, [selectedPlatform]);
 
     const toggleExpand = (version: string) => {
         setExpandedBuild(expandedBuild === version ? null : version);
     };
 
-    const getLatestVersionInfo = () => {
-        if (
-            !latestVersions ||
-            !latestVersions[selectedPlatform as keyof LatestVersions]
-        ) {
-            return null;
+    const loadMore = () => {
+        if (pagination && pagination.page < pagination.pages) {
+            fetchBuilds(pagination.page + 1);
         }
-        return latestVersions[selectedPlatform as keyof LatestVersions];
     };
-
-    const latestVersionInfo = getLatestVersionInfo();
 
     return (
         <div className="min-h-screen flex flex-col items-center p-8 bg-black text-white">
@@ -164,9 +198,7 @@ function BuildsPageContent() {
                     </div>
                 )}
 
-                {isLoading ? (
-                    <SkeletonLoader />
-                ) : latestVersionInfo ? (
+                {latestBuild && (
                     <div className="bg-gray-800 rounded-lg p-6 mb-8">
                         <h2 className="text-xl font-semibold mb-4">
                             Latest Build
@@ -175,145 +207,220 @@ function BuildsPageContent() {
                             <div className="flex justify-between items-center">
                                 <div>
                                     <span className="font-medium">
-                                        Version: {latestVersionInfo.version}
+                                        Version: {latestBuild.version}
                                     </span>
                                 </div>
-                                <Link
-                                    href={latestVersionInfo.downloadLink}
-                                    className="bg-pink-500 hover:bg-pink-600 px-4 py-1 rounded-3xl text-sm flex items-center"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    Download Installer
-                                </Link>
+                                {latestBuild.installerLink ? (
+                                    <Link
+                                        href={latestBuild.installerLink}
+                                        className="bg-pink-500 hover:bg-pink-600 px-4 py-1 rounded-3xl text-sm flex items-center"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        Download Installer
+                                        <span className="ml-1">
+                                            (
+                                            {formatFileSize(
+                                                latestBuild.installerSize
+                                            )}
+                                            )
+                                        </span>
+                                    </Link>
+                                ) : (
+                                    <span className="text-gray-400">
+                                        Installer not available
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
-                ) : null}
+                )}
 
-                <div className="bg-gray-800 rounded-lg p-6">
-                    <h2 className="text-xl font-semibold mb-4">
-                        Available Builds
-                    </h2>
-                    <div className="space-y-4">
-                        {builds.length > 0 ? (
-                            builds.map((build) => (
-                                <div
-                                    key={build.version}
-                                    className="bg-gray-700 rounded-lg p-4"
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <span className="font-medium">
-                                                {build.version}
-                                            </span>
-                                            <span className="text-sm text-gray-400 ml-4">
-                                                {build.date}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <button
-                                                className="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded-3xl text-sm"
-                                                aria-label="Download all"
-                                            >
-                                                Download All (0.0 MB)
-                                            </button>
-                                            <button
-                                                className="bg-green-500 hover:bg-green-600 px-3 py-1 rounded-3xl text-sm"
-                                                aria-label="Mirror"
-                                            >
-                                                Mirror
-                                            </button>
-                                            <button
-                                                onClick={() =>
-                                                    toggleExpand(build.version)
-                                                }
-                                                className="px-2 py-1"
-                                                aria-label={
-                                                    expandedBuild ===
-                                                    build.version
-                                                        ? "Collapse"
-                                                        : "Expand"
-                                                }
-                                            >
-                                                <FontAwesomeIcon
-                                                    icon={
+                {isLoading ? (
+                    <SkeletonLoader />
+                ) : (
+                    <div className="bg-gray-800 rounded-lg p-6">
+                        <h2 className="text-xl font-semibold mb-4">
+                            Available Builds
+                        </h2>
+                        <div className="space-y-4">
+                            {builds.length > 0 ? (
+                                builds.map((build) => (
+                                    <div
+                                        key={build.version}
+                                        className="bg-gray-700 rounded-lg p-4"
+                                    >
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <span className="font-medium">
+                                                    {build.version}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                {build.installerLink ? (
+                                                    <Link
+                                                        href={
+                                                            build.installerLink
+                                                        }
+                                                        className="bg-pink-500 hover:bg-pink-600 px-4 py-1 rounded-3xl text-sm"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        Download Installer
+                                                        <span className="ml-1">
+                                                            (
+                                                            {formatFileSize(
+                                                                build.installerSize
+                                                            )}
+                                                            )
+                                                        </span>
+                                                    </Link>
+                                                ) : (
+                                                    <span className="text-gray-400">
+                                                        Installer not available
+                                                    </span>
+                                                )}
+                                                <button
+                                                    onClick={() =>
+                                                        toggleExpand(
+                                                            build.version
+                                                        )
+                                                    }
+                                                    className="px-2 py-1"
+                                                    aria-label={
                                                         expandedBuild ===
                                                         build.version
-                                                            ? faChevronUp
-                                                            : faChevronDown
+                                                            ? "Collapse"
+                                                            : "Expand"
                                                     }
-                                                />
-                                            </button>
+                                                >
+                                                    <FontAwesomeIcon
+                                                        icon={
+                                                            expandedBuild ===
+                                                            build.version
+                                                                ? faChevronUp
+                                                                : faChevronDown
+                                                        }
+                                                    />
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                    {expandedBuild === build.version && (
-                                        <div className="mt-4 space-y-4">
-                                            <div className="text-sm">
-                                                <span className="font-medium">
-                                                    MD5:
-                                                </span>{" "}
-                                                {build.md5}
-                                            </div>
-                                            <div className="flex flex-row items-center gap-2">
-                                                <Link
-                                                    href="#"
-                                                    className="text-pink-400 hover:text-pink-300 text-sm"
-                                                >
-                                                    Open in Time Machine
-                                                    (nekocord)
-                                                </Link>
-                                                <Link
-                                                    href="#"
-                                                    className="text-pink-400 hover:text-pink-300 text-sm"
-                                                >
-                                                    Download Version Installer
-                                                </Link>
-                                            </div>
-                                            <div className="text-md flex flex-col gap-2">
-                                                <span className="font-medium">
-                                                    Modules{" "}
-                                                </span>
-                                                <hr className="border-gray-500" />
-                                            </div>
-                                            <div className="space-y-2">
-                                                {modules.map((module) => (
-                                                    <div
-                                                        key={module.name}
-                                                        className="flex justify-between items-center"
+                                        {expandedBuild === build.version && (
+                                            <div className="mt-4 space-y-4">
+                                                <div className="text-md flex flex-col gap-2">
+                                                    <span className="text-sm">
+                                                        Installer Etag:{" "}
+                                                        {build.installerEtag
+                                                            ? build.installerEtag.replace(
+                                                                  /"/g,
+                                                                  ""
+                                                              )
+                                                            : "N/A"}
+                                                    </span>
+                                                </div>
+                                                <div className="text-md flex flex-row gap-2">
+                                                    <Link
+                                                        href={
+                                                            build.nekocordTimeMachineLink ||
+                                                            "#"
+                                                        }
+                                                        className="bg-blue-500 hover:bg-blue-600 px-2 py-1 rounded-3xl text-xs"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
                                                     >
-                                                        <span className="text-sm">
-                                                            {module.name} (
-                                                            {module.size})
-                                                        </span>
-                                                        <div className="space-x-2">
-                                                            <button
-                                                                className="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded-3xl text-xs"
-                                                                aria-label={`Download ${module.name}`}
+                                                        Install in Time Machine
+                                                        (Nekocord)
+                                                    </Link>
+                                                    <Link
+                                                        href={
+                                                            build.downloadAllModLink ||
+                                                            "#"
+                                                        }
+                                                        className="bg-pink-500 hover:bg-pink-600 px-2 py-1 rounded-3xl text-xs"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        Download all modules
+                                                        (.zip)
+                                                    </Link>
+                                                </div>
+                                                <div className="text-md flex flex-col gap-2">
+                                                    <span className="font-medium">
+                                                        Modules{" "}
+                                                    </span>
+                                                    <hr className="border-gray-500" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {Object.keys(
+                                                        build.modules
+                                                    ).map((key) => {
+                                                        const moduleData =
+                                                            build.modules[key];
+                                                        return (
+                                                            <div
+                                                                key={key}
+                                                                className="flex justify-between items-center"
                                                             >
-                                                                Download
-                                                            </button>
-                                                            <button
-                                                                className="bg-green-500 hover:bg-green-600 px-3 py-1 rounded-3xl text-xs"
-                                                                aria-label={`Mirror ${module.name}`}
-                                                            >
-                                                                Mirror
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                                <span className="text-sm flex items-center">
+                                                                    {key}
+                                                                    {moduleData?.etag && (
+                                                                        <span className="ml-2 text-xs text-gray-500">
+                                                                            {moduleData.etag.replace(
+                                                                                /"/g,
+                                                                                ""
+                                                                            )}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                                {moduleData?.downloadLink ? (
+                                                                    <Link
+                                                                        href={
+                                                                            moduleData.downloadLink
+                                                                        }
+                                                                        className="bg-pink-500 hover:bg-pink-600 px-2 py-1 rounded-3xl text-xs"
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                    >
+                                                                        Download
+                                                                        (
+                                                                        {formatFileSize(
+                                                                            moduleData.fileSize
+                                                                        )}
+                                                                        )
+                                                                    </Link>
+                                                                ) : (
+                                                                    <span className="text-xs text-gray-400">
+                                                                        Not
+                                                                        available
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center text-gray-400">
+                                    No builds available for this platform
                                 </div>
-                            ))
-                        ) : (
-                            <div className="text-center text-gray-400">
-                                No builds available
+                            )}
+                        </div>
+                        {pagination && pagination.page < pagination.pages && (
+                            <div className="mt-8 text-center">
+                                <button
+                                    onClick={loadMore}
+                                    className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-md"
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? "Loading..." : "Load More"}
+                                </button>
                             </div>
                         )}
                     </div>
-                </div>
+                )}
             </main>
 
             <footer className="w-full max-w-4xl text-center text-gray-500 text-sm mt-8">
@@ -337,8 +444,10 @@ function BuildsPageContent() {
 
 export default function BuildsPage() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
-            <BuildsPageContent />
-        </Suspense>
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+            <Suspense fallback={<div>Loading...</div>}>
+                <BuildsPageContent />
+            </Suspense>
+        </ErrorBoundary>
     );
 }

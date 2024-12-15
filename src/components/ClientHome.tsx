@@ -15,7 +15,7 @@ const platforms = [
 ];
 
 function getDetectedOS() {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
         const userAgent = window.navigator.userAgent.toLowerCase();
         if (userAgent.indexOf("win") > -1) return "Windows";
         if (userAgent.indexOf("mac") > -1) return "macOS";
@@ -26,22 +26,34 @@ function getDetectedOS() {
 
 interface VersionInfo {
     version: string;
-    downloadLink: string;
+    installerLink: string;
+    installerSize: number;
+    installerEtag: string;
+    mirrorLink: string;
+    downloadAllModLink: string;
+    customInstallLink: string;
+    nekocordTimeMachineLink: string;
 }
 
 interface LatestVersions {
     windows: VersionInfo;
-    mac: VersionInfo;
+    macOS: VersionInfo;
     linux: VersionInfo;
 }
 
-function PlatformSelector({ latestVersions, detectedOS }: { latestVersions: LatestVersions, detectedOS: string }) {
+function PlatformSelector({
+    latestVersions,
+    detectedOS,
+}: {
+    latestVersions: LatestVersions;
+    detectedOS: string;
+}) {
     return (
         <div className="flex justify-center space-x-12">
             {platforms.map((platform) => (
                 <Link
                     key={platform.name}
-                    href={`/builds?platform=${platform.name.toLowerCase()}`}
+                    href={`/builds?platform=${platform.key}`}
                     className="no-underline group"
                 >
                     <div className="flex flex-col items-center cursor-pointer transition-all duration-300">
@@ -66,7 +78,9 @@ function PlatformSelector({ latestVersions, detectedOS }: { latestVersions: Late
                                 {platform.name}
                             </span>
                             <span className="text-xs font-light mb-2 opacity-60 group-hover:opacity-100 transition-opacity duration-300">
-                                {latestVersions[platform.key as keyof LatestVersions]?.version || 'Loading...'}
+                                {latestVersions[
+                                    platform.key as keyof LatestVersions
+                                ]?.version || "Loading..."}
                             </span>
                         </div>
                         {detectedOS === platform.name && (
@@ -81,7 +95,11 @@ function PlatformSelector({ latestVersions, detectedOS }: { latestVersions: Late
     );
 }
 
-export default function ClientHome({ latestVersions }: { latestVersions: LatestVersions }) {
+export default function ClientHome({
+    latestVersions,
+}: {
+    latestVersions: LatestVersions;
+}) {
     const [detectedOS, setDetectedOS] = useState("Unknown");
 
     useEffect(() => {
@@ -103,16 +121,25 @@ export default function ClientHome({ latestVersions }: { latestVersions: LatestV
                             ? `We've autodetected your platform as ${detectedOS}`
                             : "Select your platform"}
                     </h3>
-                    <PlatformSelector latestVersions={latestVersions} detectedOS={detectedOS} />
+                    <PlatformSelector
+                        latestVersions={latestVersions}
+                        detectedOS={detectedOS}
+                    />
                 </main>
             </div>
             <footer className="w-full max-w-3xl text-center text-gray-500 text-sm">
                 <div className="mb-2">
-                    <Link href="https://nekocord.dev" className="hover:text-white">
+                    <Link
+                        href="https://nekocord.dev"
+                        className="hover:text-white"
+                    >
                         download nekocord
                     </Link>{" "}
                     ·{" "}
-                    <Link href="https://discord.com" className="hover:text-white">
+                    <Link
+                        href="https://discord.com"
+                        className="hover:text-white"
+                    >
                         download discord
                     </Link>{" "}
                     ·{" "}
@@ -121,8 +148,15 @@ export default function ClientHome({ latestVersions }: { latestVersions: LatestV
                     </Link>
                 </div>
                 <div>
-                    maintained by <Link href="https://cute.fm/" className="hover:text-white">ryana</Link> ·{" "}
-                    <Link href="https://github.com/ryawaa/disbuilds" className="hover:text-white">
+                    maintained by{" "}
+                    <Link href="https://cute.fm/" className="hover:text-white">
+                        ryana
+                    </Link>{" "}
+                    ·{" "}
+                    <Link
+                        href="https://github.com/ryawaa/disbuilds"
+                        className="hover:text-white"
+                    >
                         source code
                     </Link>
                 </div>

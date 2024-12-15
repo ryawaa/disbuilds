@@ -6,16 +6,66 @@ dotenv.config();
 
 interface DiscordVersions {
     windows: string;
-    mac: string[];
-    linux: string[];
+    macOS: ModuleInfo[];
+    linux: ModuleInfo[];
+}
+
+interface ModuleInfo {
+    version: string;
+    downloadLink: string;
+    fileSize: number;
+    etag: string;
+}
+
+interface Version {
+    platform: string;
+    version: string;
+    installerLink: string;
+    mirrorLink: string;
+    downloadAllModLink: string;
+    customInstallLink: string;
+    nekocordTimeMachineLink: string;
+    installerSize: number;
+    mirrorSize: number;
+    downloadAllModSize: number;
+    customInstallSize: number;
+    installerEtag: string;
+    mirrorEtag: string;
+    downloadAllModEtag: string;
+    customInstallEtag: string;
+}
+
+interface Module {
+    version: string;
+    module_name: string;
+    downloadSize: number;
+    mirrorSize: number;
+    downloadEtag: string;
+    mirrorEtag: string;
+    downloadLink: string;
+    mirrorLink: string;
 }
 
 const DISCORD_BASE_URLS = {
-    windows:
-        "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64",
-    mac: "https://stable.dl2.discordapp.net/apps/osx",
+    windows: "https://discord.com/api/download?platform=win",
+    macOS: "https://stable.dl2.discordapp.net/apps/osx",
     linux: "https://stable.dl2.discordapp.net/apps/linux",
 };
+
+const MODULE_NAMES = [
+    "discord_desktop_core",
+    "discord_erlpack",
+    "discord_spellcheck",
+    "discord_utils",
+    "discord_voice",
+    "discord_zstd",
+    "discord_krisp",
+    "discord_game_utils",
+    "discord_cloudsync",
+    "discord_rpc",
+    "discord_dispatch",
+    "discord_modules",
+];
 
 function extractVersion(url: string): string {
     const parts = url.split("/");
@@ -36,50 +86,90 @@ async function getLatestWindowsVersion(url: string): Promise<string> {
     console.log(`Fetching latest Discord version for Windows...`);
 
     try {
-        const response = await axios.head(url, {
+        const response = await axios.get(url, {
+            maxRedirects: 0,
             validateStatus: (status) => status >= 200 && status < 400,
-            maxRedirects: 3,
-            timeout: 5000,
         });
 
-        const finalUrl = response.request.res.responseUrl || url;
-        console.log(`[Windows] Final URL: ${finalUrl}`);
+        if (response.headers.location) {
+            const version = extractVersion(response.headers.location);
+            console.log(`[Windows] Extracted version: ${version}`);
+            return version;
+        }
 
-        const version = extractVersion(finalUrl);
-        console.log(`[Windows] Extracted version: ${version}`);
-
-        return version;
+        throw new Error("No redirect location found in response headers");
     } catch (error) {
         console.error(`Error fetching Discord version for Windows:`, error);
         return "Error fetching version";
     }
 }
 
+async function getModuleInfo(
+    url: string
+): Promise<{ fileSize: number; etag: string }> {
+    try {
+        const response = await axios.head(url);
+        const fileSize = parseInt(
+            response.headers["content-length"] || "0",
+            10
+        );
+        const etag = response.headers["etag"] || "";
+        return { fileSize, etag };
+    } catch (error) {
+        console.error(`Error getting module info for ${url}:`, error);
+        return { fileSize: 0, etag: "" };
+    }
+}
+
 async function checkVersions(
     baseUrl: string,
     startVersion: number,
-    versionCount: number
-): Promise<number[]> {
-    const downloadableVersions: number[] = [];
+    versionCount: number,
+    platform: "macOS" | "linux"
+): Promise<ModuleInfo[]> {
+    const downloadableVersions: ModuleInfo[] = [];
 
     for (
         let version = startVersion;
         version > startVersion - versionCount;
         version--
     ) {
-        const url = `${baseUrl}/0.0.${version}/modules/discord_utils-1.zip`;
+        const versionString = `0.0.${version}`;
+        const moduleInfos: ModuleInfo[] = [];
+
+        const fileName =
+            platform === "macOS"
+                ? "Discord.dmg"
+                : `discord-${versionString}.deb`;
+        const url = `${baseUrl}/${versionString}/${fileName}`;
+
         try {
             const response = await axios.head(url);
             if (response.status === 200) {
-                downloadableVersions.push(version);
-                console.log(`Version ${version} is downloadable.`);
-            } else {
+                const { fileSize, etag } = await getModuleInfo(url);
+                moduleInfos.push({
+                    version: versionString,
+                    downloadLink: url,
+                    fileSize,
+                    etag,
+                });
                 console.log(
-                    `Version ${version} is not downloadable (Status: ${response.status}).`
+                    `Installer for ${platform} version ${versionString} is downloadable. Size: ${fileSize} bytes, ETag: ${etag}`
                 );
             }
         } catch (error) {
-            console.error(`Error checking version ${version}:`, error);
+            console.error(
+                `Error checking ${platform} version ${versionString}:`,
+                error
+            );
+        }
+
+        if (moduleInfos.length > 0) {
+            downloadableVersions.push(...moduleInfos);
+        } else {
+            console.log(
+                `No installer available for ${platform} version ${versionString}`
+            );
         }
     }
 
@@ -92,14 +182,23 @@ async function getLatestDiscordVersions(): Promise<DiscordVersions> {
     const windowsVersion = await getLatestWindowsVersion(
         DISCORD_BASE_URLS.windows
     );
-
-    const macVersions = await checkVersions(DISCORD_BASE_URLS.mac, 329, 20);
-    const linuxVersions = await checkVersions(DISCORD_BASE_URLS.linux, 71, 20);
+    const macVersions = await checkVersions(
+        DISCORD_BASE_URLS.macOS,
+        329,
+        4,
+        "macOS"
+    );
+    const linuxVersions = await checkVersions(
+        DISCORD_BASE_URLS.linux,
+        77,
+        4,
+        "linux"
+    );
 
     const versions: DiscordVersions = {
         windows: windowsVersion,
-        mac: macVersions.map((v) => `0.0.${v}`),
-        linux: linuxVersions.map((v) => `0.0.${v}`),
+        macOS: macVersions,
+        linux: linuxVersions,
     };
 
     console.log("All versions fetched:", versions);
@@ -107,35 +206,114 @@ async function getLatestDiscordVersions(): Promise<DiscordVersions> {
 }
 
 async function populateDatabase(db: Db, versions: DiscordVersions) {
-    const versionsCollection = db.collection("versions");
+    const versionsCollection = db.collection<Version>("versions");
 
-    for (const [platform, versionList] of Object.entries(versions)) {
-        if (Array.isArray(versionList)) {
-            for (const version of versionList) {
+    for (const [platform, versionInfo] of Object.entries(versions)) {
+        if (platform === "windows") {
+            const version = versionInfo as string;
+            if (version === "Error fetching version") {
+                console.error(
+                    "Failed to fetch Windows version. Skipping Windows population."
+                );
+                continue;
+            }
+            const installerLink = `https://discord.com/api/download?platform=win&format=exe&version=${version}`;
+            try {
+                const { fileSize, etag } = await getModuleInfo(installerLink);
+                const versionDoc: Version = {
+                    platform: "windows",
+                    version,
+                    installerLink,
+                    mirrorLink: "placeholder",
+                    downloadAllModLink: "placeholder",
+                    customInstallLink: "placeholder",
+                    nekocordTimeMachineLink: "placeholder",
+                    installerSize: fileSize,
+                    mirrorSize: 0,
+                    downloadAllModSize: 0,
+                    customInstallSize: 0,
+                    installerEtag: etag,
+                    mirrorEtag: "",
+                    downloadAllModEtag: "",
+                    customInstallEtag: "",
+                };
                 await versionsCollection.updateOne(
-                    { version, platform },
                     {
-                        $set: {
-                            version,
-                            platform,
-                            // TODO: add more links
-                        },
+                        version: versionDoc.version,
+                        platform: versionDoc.platform,
                     },
+                    { $set: versionDoc },
                     { upsert: true }
                 );
+            } catch (error) {
+                console.error(
+                    `Error fetching Windows installer info: ${error}`
+                );
+                continue;
             }
         } else {
-            await versionsCollection.updateOne(
-                { version: versionList, platform },
-                {
-                    $set: {
-                        version: versionList,
-                        platform,
-                        // TODO: add more links
+            for (const info of versionInfo as ModuleInfo[]) {
+                const versionDoc: Version = {
+                    platform,
+                    version: info.version,
+                    installerLink: info.downloadLink,
+                    mirrorLink: "placeholder",
+                    downloadAllModLink: "placeholder",
+                    customInstallLink: "placeholder",
+                    nekocordTimeMachineLink: "placeholder",
+                    installerSize: info.fileSize,
+                    mirrorSize: 0,
+                    downloadAllModSize: 0,
+                    customInstallSize: 0,
+                    installerEtag: info.etag,
+                    mirrorEtag: "",
+                    downloadAllModEtag: "",
+                    customInstallEtag: "",
+                };
+
+                await versionsCollection.updateOne(
+                    {
+                        version: versionDoc.version,
+                        platform: versionDoc.platform,
                     },
-                },
-                { upsert: true }
-            );
+                    { $set: versionDoc },
+                    { upsert: true }
+                );
+
+                for (const moduleName of MODULE_NAMES) {
+                    const moduleCollection = db.collection<Module>(moduleName);
+                    const moduleUrl = `${
+                        DISCORD_BASE_URLS[
+                            platform as keyof typeof DISCORD_BASE_URLS
+                        ]
+                    }/${info.version}/modules/${moduleName}-1.zip`;
+                    const { fileSize: moduleSize, etag: moduleEtag } =
+                        await getModuleInfo(moduleUrl);
+                    console.log(
+                        `Module ${moduleName} for ${platform} version ${info.version} has size ${moduleSize} bytes and ETag ${moduleEtag}`
+                    );
+
+                    const moduleDoc: Module = {
+                        version: info.version,
+                        module_name: moduleName,
+                        downloadSize: moduleSize,
+                        mirrorSize: 0,
+                        downloadEtag: moduleEtag,
+                        mirrorEtag: "",
+                        downloadLink: moduleUrl,
+                        mirrorLink: "placeholder",
+                    };
+
+                    await moduleCollection.updateOne(
+                        {
+                            version: moduleDoc.version,
+                            module_name: moduleDoc.module_name,
+                        },
+                        { $set: moduleDoc },
+                        { upsert: true }
+                    );
+                }
+            }
         }
     }
 
@@ -145,12 +323,14 @@ async function populateDatabase(db: Db, versions: DiscordVersions) {
 async function connectToMongoDB(): Promise<MongoClient> {
     const uri = process.env.MONGODB_URI;
     if (!uri) {
-        throw new Error('MONGODB_URI is not defined in the environment variables');
+        throw new Error(
+            "MONGODB_URI is not defined in the environment variables"
+        );
     }
 
     const client = new MongoClient(uri);
     await client.connect();
-    console.log('Connected to MongoDB');
+    console.log("Connected to MongoDB");
     return client;
 }
 
