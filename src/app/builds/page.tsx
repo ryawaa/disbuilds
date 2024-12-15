@@ -9,7 +9,9 @@ import {
     faWindows,
     faApple,
     faLinux,
+    faAndroid
 } from "@fortawesome/free-brands-svg-icons";
+import {faGlobe} from "@fortawesome/free-solid-svg-icons";
 import axios from "axios";
 import { ErrorBoundary } from "react-error-boundary";
 
@@ -17,6 +19,11 @@ const platforms = [
     { name: "Windows", key: "windows", icon: faWindows },
     { name: "macOS", key: "mac", icon: faApple },
     { name: "Linux", key: "linux", icon: faLinux },
+    { name: "Web", key: "web", icon: faGlobe },
+    { name: "iOS", key: "ios", icon: faApple },
+    { name: "Android", key: "android", icon: faAndroid },
+    { name: "Dev", key: "developer", icon: faGlobe },
+    { name: "Marketing", key: "marketing", icon: faGlobe },
 ];
 
 interface Build {
@@ -172,7 +179,7 @@ function BuildsPageContent() {
                     The Discord Build Archive
                 </h3>
 
-                <div className="flex justify-center space-x-2 mb-8">
+                <div className="flex flex-wrap justify-center gap-2 mb-8">
                     {platforms.map((platform) => (
                         <Link
                             key={platform.name}
@@ -404,7 +411,8 @@ function BuildsPageContent() {
                                 ))
                             ) : (
                                 <div className="text-center text-gray-400">
-                                    No builds available for this platform
+                                    <p>No builds available for this platform.</p>
+                                    <p>Please check back later or reach out to ryana in discord (ryawaa) if you wanna help!</p>
                                 </div>
                             )}
                         </div>
