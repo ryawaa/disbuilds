@@ -23,6 +23,8 @@ https://disbuilds.cute.fm until i can secure a domain
 
 #### planned
 
+- [ ] install in nekocord
+- [ ] override discord versions via a custom installer
 - [ ] support for web
 - [ ] support for development
 - [ ] support for ios
