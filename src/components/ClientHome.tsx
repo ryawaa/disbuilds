@@ -175,13 +175,9 @@ export default function ClientHome({
                     >
                         download discord
                     </Link>{" "}
-                    ·{" "}
-                    <Link href="https://cute.fm" className="hover:text-white">
-                        back to cute.fm
-                    </Link>
                 </div>
                 <div>
-                    maintained by{" "}
+                    hosted by{" "}
                     <Link href="https://cute.fm/" className="hover:text-white">
                         ryana
                     </Link>{" "}

@@ -433,7 +433,7 @@ function BuildsPageContent() {
 
             <footer className="w-full max-w-4xl text-center text-gray-500 text-sm mt-8">
                 <div>
-                    maintained by{" "}
+                    hosted by{" "}
                     <Link href="https://cute.fm/" className="hover:text-white">
                         ryana
                     </Link>{" "}
